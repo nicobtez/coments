@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Overlay Generator — StreamKit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Sora:wght@400;600;700&family=Space+Grotesk:wght@400;500;700&family=DM+Sans:wght@400;500;700&family=Rubik:wght@400;500;700&family=Nunito:wght@400;600;700;800&family=Barlow:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --surface3: #22222f;
+    --border: #2a2a3a;
+    --accent: #7c6af7;
+    --accent2: #5de4c7;
+    --text: #e8e8f0;
+    --text2: #888899;
+    --text3: #555566;
+    --kick: #53fc18;
+    --twitch: #9147ff;
+    --youtube: #ff0000;
+    --font-ui: 'Sora', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .logo span { color: var(--text2); font-weight: 400; }
+  header .spacer { flex: 1; }
+  .export-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 18px;
+    background: linear-gradient(135deg, var(--accent), #6b5ce7);
+    border: none; border-radius: 8px;
+    color: #fff; font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.2px;
+  }
+  .export-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(124,106,247,0.4); }
+  .export-btn:active { transform: translateY(0); }
+  .export-btn svg { width: 15px; height: 15px; }
+  .scale-badge {
+    padding: 5px 10px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 11px; color: var(--text2); font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* LAYOUT */
+  .app-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 320px; flex-shrink: 0;
+    background: var(--surface); border-right: 1px solid var(--border);
+    overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .section { border-bottom: 1px solid var(--border); padding: 16px; }
+
+  .section-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 14px; user-select: none;
+  }
+  .section-header-left {
+    display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer;
+  }
+  .section-icon {
+    width: 22px; height: 22px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--text2); flex: 1;
+  }
+  .section-toggle { font-size: 10px; color: var(--text3); }
+
+  /* Reset button */
+  .reset-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text3);
+    font-family: var(--font-ui); font-size: 10px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .reset-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,106,247,0.08); }
+  .reset-btn:active { transform: scale(0.95); }
+  .reset-btn svg { width: 10px; height: 10px; }
+
+  .section-content { display: flex; flex-direction: column; gap: 12px; }
+  .section-content.collapsed { display: none; }
+
+  /* Fields */
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field-label { font-size: 11px; color: var(--text2); font-weight: 500; }
+
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text); font-family: var(--font-ui); font-size: 12px;
+    padding: 7px 10px; outline: none; transition: border-color 0.15s; appearance: none;
+  }
+  input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 60px; line-height: 1.4; }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555566'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer;
+  }
+
+  /* Slider */
+  .slider-row { display: flex; align-items: center; gap: 8px; }
+  .slider-val { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--accent2); min-width: 36px; text-align: right; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; flex: 1; height: 3px;
+    background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg);
+    box-shadow: 0 0 0 2px var(--accent); transition: box-shadow 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { box-shadow: 0 0 0 4px rgba(124,106,247,0.3); }
+
+  /* Color */
+  .color-row { display: flex; align-items: center; gap: 8px; }
+  .color-swatch-btn {
+    width: 32px; height: 32px; border-radius: 7px; border: 2px solid var(--border);
+    cursor: pointer; flex-shrink: 0; position: relative; overflow: hidden; transition: border-color 0.15s;
+  }
+  .color-swatch-btn:hover { border-color: var(--accent); }
+  .color-swatch-btn input[type="color"] {
+    position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px);
+    opacity: 0; cursor: pointer; border: none; padding: 0;
+  }
+  .color-hex {
+    font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text2);
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; width: 80px;
+  }
+
+  /* Toggle */
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; }
+  .toggle-label { font-size: 12px; color: var(--text); }
+  .toggle {
+    width: 36px; height: 20px; background: var(--surface3); border-radius: 10px;
+    border: 1px solid var(--border); cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); border-color: var(--accent); }
+  .toggle::after {
+    content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; top: 2px; left: 2px; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .toggle.on::after { left: 18px; }
+
+  /* Platform */
+  .platform-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .platform-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 10px 6px; background: var(--surface2); border: 2px solid var(--border);
+    border-radius: 9px; cursor: pointer; transition: all 0.15s;
+    font-size: 10px; color: var(--text2); font-weight: 600; font-family: var(--font-ui);
+  }
+  .platform-btn:hover { border-color: var(--text3); color: var(--text); }
+  .platform-btn.active.kick { border-color: var(--kick); color: var(--kick); background: rgba(83,252,24,0.08); }
+  .platform-btn.active.twitch { border-color: var(--twitch); color: var(--twitch); background: rgba(145,71,255,0.1); }
+  .platform-btn.active.youtube { border-color: var(--youtube); color: var(--youtube); background: rgba(255,0,0,0.08); }
+  .platform-icon { font-size: 22px; }
+
+  /* Badges */
+  .badges-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .badge-chip {
+    display: flex; align-items: center; gap: 5px; padding: 4px 10px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 20px;
+    font-size: 11px; color: var(--text2); cursor: pointer; transition: all 0.15s; font-weight: 500;
+  }
+  .badge-chip.active { background: rgba(124,106,247,0.15); border-color: var(--accent); color: var(--text); }
+
+  .info-tag {
+    font-size: 10px; color: var(--text3); background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; display: inline-block;
+  }
+
+  /* PREVIEW */
+  .preview-area {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--bg); position: relative; overflow: hidden; gap: 16px;
+  }
+  .preview-bg-toggle {
+    position: absolute; top: 16px; right: 16px; display: flex; gap: 6px; z-index: 5;
+  }
+  .bg-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: 2px solid var(--border);
+    cursor: pointer; transition: border-color 0.15s; font-size: 11px;
+    display: flex; align-items: center; justify-content: center; color: var(--text2);
+  }
+  .bg-btn.active { border-color: var(--accent); }
+  #previewBgDark { background: #111; }
+  #previewBgLight { background: #eee; color: #333; }
+  #previewBgGreen { background: #00b140; }
+  #previewBgTrans { background: repeating-conic-gradient(#444 0% 25%, #222 0% 50%) 0 0 / 14px 14px; }
+
+  .canvas-wrapper {
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .canvas-wrapper::before {
+    content: ''; position: absolute; inset: 0; border-radius: 8px;
+    background: repeating-conic-gradient(#2a2a3a 0% 25%, #1a1a24 0% 50%) 0 0 / 20px 20px;
+    z-index: -1; pointer-events: none;
+  }
+  #previewCanvas {
+    border-radius: 8px; display: block;
+    max-width: 90%; max-height: 60vh; object-fit: contain;
+  }
+  .preview-info {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace;
+  }
+  .preview-info span { color: var(--text2); }
+
+  .resize-handle { width: 4px; background: var(--border); cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
+  .resize-handle:hover { background: var(--accent); }
+
+  .section-icon.platform { background: rgba(255,255,255,0.05); }
+  .section-icon.user { background: rgba(93,228,199,0.1); }
+  .section-icon.message { background: rgba(124,106,247,0.1); }
+  .section-icon.style { background: rgba(255,180,80,0.1); }
+  .section-icon.bg { background: rgba(255,77,106,0.1); }
+  .section-icon.export { background: rgba(255,200,80,0.1); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🎬</div>
+    StreamKit <span>/ Chat Overlay</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="scale-badge" id="scaleBadge">Export: 4x · 4K</div>
+  <button class="export-btn" onclick="exportImage()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Exportar PNG 4K
+  </button>
+</header>
+
+<div class="app-body">
+<aside class="sidebar" id="sidebar">
+
+  <!-- PLATFORM -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-header-left" onclick="toggleSection(this.closest('.section-header'))">
+        <div class="section-icon platform">🎮</div>
+        <span class="section-title">Plataforma</span>
+        <span class="section-toggle">▾</span>
+      </div>
+      <button class="reset-btn" onclick="resetSection('platform')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+    <div class="section-content">
+      <div class="platform-grid">
+        <button class="platform-btn active kick" onclick="setPlatform('kick',this)">
+          <span class="platform-icon">🟢</span>KICK
+        </button>
+        <button class="platform-btn twitch" onclick="setPlatform('twitch',this)">
+          <span class="platform-icon">🟣</span>TWITCH
+        </button>
+        <button class="platform-btn youtube" onclick="setPlatform('youtube',this)">
+          <span class="platform-icon">🔴</span>YOUTUBE
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- USER -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-header-left" onclick="toggleSection(this.closest('.section-header'))">
+        <div class="section-icon user">👤</div>
+        <span class="section-title">Usuario</span>
+        <span class="section-toggle">▾</span>
+      </div>
+      <button class="reset-btn" onclick="resetSection('user')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+    <div class="section-content">
+      <div class="toggle-row">
+        <span class="toggle-label">Mostrar nombre de usuario</span>
+        <div class="toggle on" id="toggleUsername" onclick="toggleCtrl('showUsername','toggleUsername')"></div>
+      </div>
+      <div class="field" id="usernameFields">
+        <label class="field-label">Nombre de usuario</label>
+        <input type="text" id="username" value="china" oninput="render()">
+      </div>
+      <div class="field" id="nametagColorField">
+        <label class="field-label">Color del nametag</label>
+        <div class="color-row">
+          <div class="color-swatch-btn" id="swatchNametag" style="background:#53fc18;">
+            <input type="color" id="nametagColor" value="#53fc18" oninput="syncSwatch('nametagColor','swatchNametag');render()">
+          </div>
+          <input type="text" class="color-hex" id="nametagColorHex" value="#53fc18" oninput="syncColorFromHex('nametagColor','nametagColorHex','swatchNametag');render()" maxlength="7">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Badges / Emblemas</label>
+        <div class="badges-grid">
+          <div class="badge-chip" data-badge="mod" onclick="toggleBadge(this)">⚔️ Mod</div>
+          <div class="badge-chip" data-badge="sub" onclick="toggleBadge(this)">⭐ Sub</div>
+          <div class="badge-chip" data-badge="vip" onclick="toggleBadge(this)">💎 VIP</div>
+          <div class="badge-chip" data-badge="verified" onclick="toggleBadge(this)">✅ Verified</div>
+          <div class="badge-chip" data-badge="founder" onclick="toggleBadge(this)">🏆 Founder</div>
+          <div class="badge-chip" data-badge="prime" onclick="toggleBadge(this)">👑 Prime</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MESSAGE -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-header-left" onclick="toggleSection(this.closest('.section-header'))">
+        <div class="section-icon message">💬</div>
+        <span class="section-title">Mensaje</span>
+        <span class="section-toggle">▾</span>
+      </div>
+      <button class="reset-btn" onclick="resetSection('message')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+    <div class="section-content">
+      <div class="field">
+        <label class="field-label">Texto del comentario</label>
+        <textarea id="messageText" oninput="render()">china, tú con quién pelearías si pudieras?</textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">Fuente</label>
+        <select id="fontFamily" onchange="render()">
+          <option value="Sora">Sora</option>
+          <option value="Nunito" selected>Nunito</option>
+          <option value="Rubik">Rubik</option>
+          <option value="Barlow">Barlow</option>
+          <option value="Outfit">Outfit</option>
+          <option value="DM Sans">DM Sans</option>
+          <option value="Space Grotesk">Space Grotesk</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Tamaño del mensaje</label>
+        <div class="slider-row">
+          <input type="range" id="fontSize" min="18" max="56" value="32" oninput="syncVal('fontSize','fontSizeVal');render()">
+          <span class="slider-val" id="fontSizeVal">32px</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Peso tipográfico</label>
+        <select id="fontWeight" onchange="render()">
+          <option value="400">Regular (400)</option>
+          <option value="600">Semi-Bold (600)</option>
+          <option value="700" selected>Bold (700)</option>
+          <option value="800">Extra-Bold (800)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Color del texto</label>
+        <div class="color-row">
+          <div class="color-swatch-btn" id="swatchText" style="background:#ffffff;">
+            <input type="color" id="textColor" value="#ffffff" oninput="syncSwatch('textColor','swatchText');render()">
+          </div>
+          <input type="text" class="color-hex" id="textColorHex" value="#ffffff" oninput="syncColorFromHex('textColor','textColorHex','swatchText');render()" maxlength="7">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Interlineado</label>
+        <div class="slider-row">
+          <input type="range" id="lineHeight" min="1.0" max="2.0" step="0.05" value="1.35" oninput="syncValFloat('lineHeight','lineHeightVal');render()">
+          <span class="slider-val" id="lineHeightVal">1.35</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTAINER STYLE -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-header-left" onclick="toggleSection(this.closest('.section-header'))">
+        <div class="section-icon style">🎨</div>
+        <span class="section-title">Contenedor</span>
+        <span class="section-toggle">▾</span>
+      </div>
+      <button class="reset-btn" onclick="resetSection('container')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+    <div class="section-content">
+      <div class="field">
+        <label class="field-label">Border Radius</label>
+        <div class="slider-row">
+          <input type="range" id="borderRadius" min="0" max="80" value="24" oninput="syncVal('borderRadius','borderRadiusVal');render()">
+          <span class="slider-val" id="borderRadiusVal">24px</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Padding horizontal</label>
+        <div class="slider-row">
+          <input type="range" id="paddingH" min="20" max="120" value="56" oninput="syncVal('paddingH','paddingHVal');render()">
+          <span class="slider-val" id="paddingHVal">56px</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Padding vertical</label>
+        <div class="slider-row">
+          <input type="range" id="paddingV" min="12" max="80" value="32" oninput="syncVal('paddingV','paddingVVal');render()">
+          <span class="slider-val" id="paddingVVal">32px</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Gap logo → contenido</label>
+        <div class="slider-row">
+          <input type="range" id="logoGap" min="8" max="60" value="28" oninput="syncVal('logoGap','logoGapVal');render()">
+          <span class="slider-val" id="logoGapVal">28px</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Gap usuario → mensaje</label>
+        <div class="slider-row">
+          <input type="range" id="userMsgGap" min="0" max="40" value="8" oninput="syncVal('userMsgGap','userMsgGapVal');render()">
+          <span class="slider-val" id="userMsgGapVal">8px</span>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Activar borde</span>
+        <div class="toggle" id="toggleBorder" onclick="toggleCtrl('showBorder','toggleBorder')"></div>
+      </div>
+      <div class="field" id="borderFields" style="display:none;">
+        <label class="field-label">Color del borde</label>
+        <div class="color-row">
+          <div class="color-swatch-btn" id="swatchBorder" style="background:#ffffff;">
+            <input type="color" id="borderColor" value="#ffffff" oninput="syncSwatch('borderColor','swatchBorder');render()">
+          </div>
+          <input type="text" class="color-hex" id="borderColorHex" value="#ffffff" oninput="syncColorFromHex('borderColor','borderColorHex','swatchBorder');render()" maxlength="7">
+        </div>
+        <div class="slider-row" style="margin-top:6px;">
+          <input type="range" id="borderWidth" min="1" max="10" value="2" oninput="syncVal('borderWidth','borderWidthVal');render()">
+          <span class="slider-val" id="borderWidthVal">2px</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Sombra</label>
+        <div class="slider-row">
+          <input type="range" id="shadowBlur" min="0" max="100" value="0" oninput="syncVal('shadowBlur','shadowBlurVal');render()">
+          <span class="slider-val" id="shadowBlurVal">0px</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BACKGROUND -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-header-left" onclick="toggleSection(this.closest('.section-header'))">
+        <div class="section-icon bg">🌈</div>
+        <span class="section-title">Fondo del Contenedor</span>
+        <span class="section-toggle">▾</span>
+      </div>
+      <button class="reset-btn" onclick="resetSection('background')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+    <div class="section-content">
+      <div class="field">
+        <label class="field-label">Modo de fondo</label>
+        <select id="bgMode" onchange="updateBgMode();render()">
+          <option value="solid" selected>Color sólido</option>
+          <option value="gradient">Degradado</option>
+          <option value="transparent">Transparente</option>
+        </select>
+      </div>
+      <div id="bgSolidFields">
+        <div class="field">
+          <label class="field-label">Color de fondo</label>
+          <div class="color-row">
+            <div class="color-swatch-btn" id="swatchBg" style="background:#1a1a1f;">
+              <input type="color" id="bgColor" value="#1a1a1f" oninput="syncSwatch('bgColor','swatchBg');render()">
+            </div>
+            <input type="text" class="color-hex" id="bgColorHex" value="#1a1a1f" oninput="syncColorFromHex('bgColor','bgColorHex','swatchBg');render()" maxlength="7">
+          </div>
+        </div>
+      </div>
+      <div id="bgGradientFields" style="display:none;">
+        <div class="field">
+          <label class="field-label">Color inicial</label>
+          <div class="color-row">
+            <div class="color-swatch-btn" id="swatchGrad1" style="background:#1a1a1f;">
+              <input type="color" id="gradColor1" value="#1a1a1f" oninput="syncSwatch('gradColor1','swatchGrad1');render()">
+            </div>
+            <input type="text" class="color-hex" id="gradColor1Hex" value="#1a1a1f" oninput="syncColorFromHex('gradColor1','gradColor1Hex','swatchGrad1');render()" maxlength="7">
+          </div>
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label class="field-label">Color final</label>
+          <div class="color-row">
+            <div class="color-swatch-btn" id="swatchGrad2" style="background:#2d1a4a;">
+              <input type="color" id="gradColor2" value="#2d1a4a" oninput="syncSwatch('gradColor2','swatchGrad2');render()">
+            </div>
+            <input type="text" class="color-hex" id="gradColor2Hex" value="#2d1a4a" oninput="syncColorFromHex('gradColor2','gradColor2Hex','swatchGrad2');render()" maxlength="7">
+          </div>
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label class="field-label">Ángulo del degradado</label>
+          <div class="slider-row">
+            <input type="range" id="gradAngle" min="0" max="360" value="135" oninput="syncVal('gradAngle','gradAngleVal','°');render()">
+            <span class="slider-val" id="gradAngleVal">135°</span>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Transparencia (alfa del fondo)</label>
+        <div class="slider-row">
+          <input type="range" id="bgAlpha" min="0" max="100" value="100" oninput="syncVal('bgAlpha','bgAlphaVal','%');render()">
+          <span class="slider-val" id="bgAlphaVal">100%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Brillo</label>
+        <div class="slider-row">
+          <input type="range" id="bgBrightness" min="20" max="200" value="100" oninput="syncVal('bgBrightness','bgBrightnessVal','%');render()">
+          <span class="slider-val" id="bgBrightnessVal">100%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Contraste</label>
+        <div class="slider-row">
+          <input type="range" id="bgContrast" min="20" max="200" value="100" oninput="syncVal('bgContrast','bgContrastVal','%');render()">
+          <span class="slider-val" id="bgContrastVal">100%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPORT -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-header-left" onclick="toggleSection(this.closest('.section-header'))">
+        <div class="section-icon export">📐</div>
+        <span class="section-title">Exportación</span>
+        <span class="section-toggle">▾</span>
+      </div>
+      <button class="reset-btn" onclick="resetSection('export')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Reset
+      </button>
+    </div>
+    <div class="section-content">
+      <div class="field">
+        <label class="field-label">Escala de exportación</label>
+        <select id="exportScale" onchange="updateExportBadge();render()">
+          <option value="2">2x — HD (1080p equiv.)</option>
+          <option value="3">3x — QHD</option>
+          <option value="4" selected>4x — 4K</option>
+        </select>
+      </div>
+      <span class="info-tag">El preview es en baja resolución. El PNG exportado usa la escala seleccionada con transparencia completa.</span>
+    </div>
+  </div>
+
+</aside>
+
+<div class="resize-handle" id="resizeHandle"></div>
+
+<main class="preview-area" id="previewArea">
+  <div class="preview-bg-toggle">
+    <div class="bg-btn active" id="previewBgDark" onclick="setPreviewBg(this,'#111111')" title="Fondo oscuro">D</div>
+    <div class="bg-btn" id="previewBgLight" onclick="setPreviewBg(this,'#eeeeee')" title="Fondo claro">L</div>
+    <div class="bg-btn" id="previewBgGreen" onclick="setPreviewBg(this,'#00b140')" title="Chroma Key">C</div>
+    <div class="bg-btn" id="previewBgTrans" onclick="setPreviewBg(this,'checker')" title="Transparencia">T</div>
+  </div>
+  <div class="canvas-wrapper" id="canvasWrapper">
+    <canvas id="previewCanvas"></canvas>
+  </div>
+  <div class="preview-info">
+    Preview live · Exportar con botón arriba ·
+    <span id="dimensionLabel">—</span>
+  </div>
+</main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// DEFAULTS — single source of truth for resets
+// ═══════════════════════════════════════════════════════
+const DEFAULTS = {
+  platform: { platform: 'kick' },
+  user: {
+    showUsername: true,
+    username: 'china',
+    nametagColor: '#53fc18',
+    badges: new Set(),
+  },
+  message: {
+    messageText: 'china, tú con quién pelearías si pudieras?',
+    fontFamily: 'Nunito',
+    fontSize: 32,
+    fontWeight: '700',
+    textColor: '#ffffff',
+    lineHeight: 1.35,
+  },
+  container: {
+    borderRadius: 24,
+    paddingH: 56,
+    paddingV: 32,
+    logoGap: 28,
+    userMsgGap: 8,
+    showBorder: false,
+    borderColor: '#ffffff',
+    borderWidth: 2,
+    shadowBlur: 0,
+  },
+  background: {
+    bgMode: 'solid',
+    bgColor: '#1a1a1f',
+    gradColor1: '#1a1a1f',
+    gradColor2: '#2d1a4a',
+    gradAngle: 135,
+    bgAlpha: 100,
+    bgBrightness: 100,
+    bgContrast: 100,
+  },
+  export: { exportScale: 4 },
+};
+
+// Flat working state
+const state = {
+  ...DEFAULTS.platform,
+  ...DEFAULTS.user,
+  badges: new Set(),
+  ...DEFAULTS.message,
+  ...DEFAULTS.container,
+  ...DEFAULTS.background,
+  ...DEFAULTS.export,
+};
+
+// ═══════════════════════════════════════════════════════
+// PLATFORM LOGOS
+// ═══════════════════════════════════════════════════════
+function roundRect(ctx, x, y, w, h, r) {
+  if (r > Math.min(w,h)/2) r = Math.min(w,h)/2;
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h); ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r); ctx.arcTo(x, y, x+r, y, r);
+}
+
+function drawKickLogo(ctx, x, y, size) {
+  const s = size, r = s*0.15, pad = s*0.18, lw = s*0.15;
+  ctx.save(); ctx.translate(x, y);
+  ctx.beginPath(); roundRect(ctx,0,0,s,s,r); ctx.fillStyle='#53fc18'; ctx.fill();
+  ctx.fillStyle='#000';
+  ctx.fillRect(pad, pad, lw, s-pad*2);
+  const mx=pad+lw, cy=s/2;
+  ctx.beginPath();
+  ctx.moveTo(mx,cy-s*0.04); ctx.lineTo(s-pad,pad); ctx.lineTo(s-pad+lw*0.6,pad); ctx.lineTo(mx+lw,cy);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(mx,cy+s*0.04); ctx.lineTo(s-pad,s-pad); ctx.lineTo(s-pad+lw*0.6,s-pad); ctx.lineTo(mx+lw,cy);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawTwitchLogo(ctx, x, y, size) {
+  const s=size, r=s*0.15, pad=s*0.2, barW=s*0.13, topH=s*0.13;
+  ctx.save(); ctx.translate(x,y);
+  ctx.beginPath(); roundRect(ctx,0,0,s,s,r); ctx.fillStyle='#9147ff'; ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath();
+  ctx.moveTo(pad,pad); ctx.lineTo(s-pad,pad); ctx.lineTo(s-pad,s*0.6);
+  ctx.lineTo(s*0.6,s*0.8); ctx.lineTo(s*0.6,s*0.6); ctx.lineTo(s*0.4,s*0.6);
+  ctx.lineTo(s*0.4,s*0.8); ctx.lineTo(pad,s*0.6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#9147ff';
+  ctx.fillRect(pad+barW, pad+topH, s-pad*2-barW*2, s*0.28);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(s*0.34, pad+topH+s*0.04, barW, s*0.2);
+  ctx.fillRect(s*0.53, pad+topH+s*0.04, barW, s*0.2);
+  ctx.restore();
+}
+
+function drawYoutubeLogo(ctx, x, y, size) {
+  const s=size, r=s*0.15;
+  ctx.save(); ctx.translate(x,y);
+  ctx.beginPath(); roundRect(ctx,0,0,s,s,r); ctx.fillStyle='#ff0000'; ctx.fill();
+  ctx.fillStyle='#fff';
+  const cx=s/2, cy=s/2, tw=s*0.42, th=s*0.34;
+  ctx.beginPath();
+  ctx.moveTo(cx-tw/2+tw*0.1, cy-th/2);
+  ctx.lineTo(cx+tw/2, cy);
+  ctx.lineTo(cx-tw/2+tw*0.1, cy+th/2);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// ── LOGOS OFICIALES — reemplazá cada TU_BASE64_XXX_AQUI con tu string Base64 ──
+// Pasos:
+//   1. Descargá el PNG oficial de cada plataforma
+//   2. Convertilo en https://www.base64-image.de
+//   3. Pegá el string completo (data:image/png;base64,...) donde corresponda
+
+const LOGO_IMGS = {};
+
+function loadImg(key, base64) {
+  const img = new Image();
+  img.onload = () => { LOGO_IMGS[key] = img; render(); };
+  img.src = base64;
+}
+
+loadImg('kick',    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAJjklEQVR4nO3ZIW5cZxiG0d/VhUYF1SArGyjvPqbZQYIDuoZuINg7aGYBgaWhKa9UNCo2HMklBgaR0oCZb5znHOnqp+9lj/TdrCu0P+0epzfAM+8O2/H99Aj+v/1p92qt9ff0Dnjm9WE7fpge8dwP0wMAgMsTAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCtukBwJz9afdqesOZ/DQ9AK6dAIC2P9dad9MjgMtzAgCAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIGibHgAvwM/70+7X6RFn8uP0AGCGAICve/P0AXw3nAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAgSAAAQJAAAIEgAAECQAACAIAEAAEECAACCBAAABAkAAAjapgcAwDP/TA84k6v7LwEAwLW4P2zHt9MjKpwAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAI2qYHAPDN7qcHnMnH6QElAgDgZXk4bMe30yN4+ZwAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIupke8CX70+5xegPAFbufHnAmHw/b8cP0iIptegAA3+zN0/uw1rr9jt611hIAF+IEAPBy3X5nLxckAAAgSAAAQJAAAIAgAQAAQQIAAIIEAAAECQAACBIAABAkAAAgSAAAQJAAAIAgAQAAQQIAAIIEAAAECQAACBIAABAkAAAgSAAAQJAAAIAgAQAAQQIAAIIEAAAECQAACBIAABAkAAAgSAAAQJAAAIAgAQAAQQIAAIIEAAAECQAACBIAABAkAAAgSAAAQJAAAIAgAQAAQQIAAIIEAAAECQAACBIAABAkAAAgSAAAQJAAAIAgAQAAQQIAAIIEAAAECQAACBIAABAkAAAgSAAAQJAAAIAgAQAAQQIAAIIEAAAE3UwP+JL9afc4vQGAi3tYa/01PeJM3h2246fpEc9t0wMA4MntWuuX6RFncrfWuqoAcAIAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBomx4AL8D9Wuvz9Igz+X2tdTs9Arg8AQBf9/mwHd9PjziH/Wn32xIAkOQEAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABA0DY9ABj1enrAmdyttf6YHgHXTABA2GE7fprecA770+7f6Q1w7ZwAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAIEgAAECQAACBIAABAkAAAgCABAABBAgAAggQAAAQJAAAI+g9uolMnGmWPUQAAAABJRU5ErkJggg==');    // https://kick.com/brand
+loadImg('twitch',  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAQRklEQVR4nO3Zr4+lVx3H8Wd2txDIFEOTJhsERVQ0VJBANYYEi8OuIQgwIPoXICpahW9VQyApukkFKa6iBocBNQlkWsFM6P5iL6LddmZ27px77/Oc55zz/b5ef8FNZrOf9/M9RxNpvf36Z29O0/Sb1r8DIL7Nr++98c3ft/4VF91q/QNow/gD5CYAEjL+AAiAZIw/ANMkAFIx/gA8JQCSMP4AXCQAEjD+AFwlAIIz/gBcRwAEZvwB2EYABGX8AbiJAAjI+ANQIgCCMf4A7EIABGL8AdiVAAjC+AOwDwEQgPEHYF8CYHDGH4BDCICBGX8ADiUABmX8AZhDAAzI+AMwlwAYjPEHYAkCYCDGH4ClCIBBGH8AliQABmD8AViaAOic8QegBgHQMeMPQC0CoFPGH4CaBECHjD8AtQmAzhh/ANYgADpi/AFYiwDohPEHYE0CoAPGH4C1CYDGjD8ALQiAhow/AK0IgEaMPwAtCYAGjD8ArQmAlRl/AHpwp/UPyCTy+L/40q2PWv8GgKf+9Y8nr7X+Db0TACuJPP7TNE0v/+j28fd+cOuV1r8D4Ox0On/vzQetf0b3PAGsIPr4AzAeAVCZ8QegRwKgIuMPQK8EQCXGH4CeCYAKjD8AvRMACzP+AIxAACzI+AMwCgGwEOMPwEgEwAKMPwCjEQAzGX8ARiQAZjD+AIxKABzI+AMwMgFwAOMPwOgEwJ6MPwARCIA9GH8AohAAOzL+AEQiAHZg/AGIRgAUGH8AIhIANzD+AEQlALYw/gBEJgCuYfwBiE4AXGH8AchAAFxg/AHIQgB8wfgDkIkAmIw/APmkDwDjD0BGqQPA+AOQVdoAMP4AZJYyAIw/ANmlCwDjDwDJAsD4A8Dn0gSA8QeAr6QIAOMPAJeFDwDjDwDPCh0Axh8Arhc2AIw/AGwXMgCMPwDcLFwAGH8AKAsVAMYfAHYTJgCMPwDsLkQAGH8A2M/wAWD8AWB/QweA8QeAwwwbAMYfAA43ZAAYfwCYZ7gAMP4AMN9QAWD8AWAZwwSA8QeA5QwRAMYfAJbVfQAYfwBYXtcBYPwBoI5uA8D4A0A9XQaA8QeAuroLgLdf/++vJuMPAFV1FwAAQH0CAAASEgAAkJAAAICEBAAAJCQAACAhAQAACQkAAEjoTusfANTxt7/8r/VPuOS73799/vwL03Hr39HKyd830ycnT1r/jEte/fHt1j+BhgQABHR2Op1//P7j3sb2OPPgfHLyZPr4/cetf8Ylmf8eeAKAkDJ/aQO7EQAQ0NnpdN76NwB9EwAAkJAAgIA8AQAlAgAC8gQAlAgAAEhIAEBAngCAEgEAAXkCAEoEAATkAgCUCAAIyAUAKBEAAJCQAICAPAEAJQIAAvIEAJQIAABISABAQJ4AgBIBAAF5AgBKBAAE5AIAlAgACMgFACgRAACQkACAgDwBACUCAALyBACUCAAASEgAQECeAIASAQABeQIASgQABOQCAJQIAAjIBQAoEQAAkJAAgIA8AQAlAgAC8gQAlAgAAEhIAEBAngCAEgEAAXkCAEoEAATkAgCUCAAIyAUAKBEAAJCQAICAPAEAJQIAAvIEAJQIAABISABAQJ4AgBIBAAF5AgBKBAAE5AIAlAgACMgFACgRAACQkACAgDwBACUCAALyBACUCAAASEgAQECeAIASAQABeQIASgQABOQCAJQIAAjIBQAoEQAAkJAAgIA8AQAlAgAC8gQAlAgAAEhIAEBAngCAEgEAAXkCAEoEAATkAgCUCAAIyAUAKBEAAJCQAICAPAEAJQIAAvIEAJQIAABISABAQJ4AgBIBAAF5AgBKBAAE5AIAlAgACMgFACgRAACQkACAgDwBACUCAALyBACUCAAASEgAQECeAIASAQABeQIASgQABOQCAJQIAAjIBQAoEQAAkJAAgIA8AQAlAgAC8gQAlAgAAEhIAEBAngCAEgEAAXkCAEoEAATkAgCUCAAIyAUAKBEAAJCQAICAPAEAJQIAAvIEAJQIAABISABAQJ4AgBIBAAF5AgBKBAAE5AIAlAgACMgFACgRAACQkACAgDwBACUCAALyBACUCAAASEgAQECeAIASAQABeQIASgQABOQCAJQIAAjIBQAoEQAAkJAAgIA8AQAlAgAC8gQAlAgAAEhIAEBAngCAEgEAAXkCAEoEAATkAgCUCAAIyAUAKBEAAJCQAICAPAEAJXda/wCgjp/c+1rrn3DJ3ZePWv+Epr5991Z3fxNyEwAQVPbB7Y2/B73xBAAACQkAAEhIAABAQgIAABISAACQkAAAgIQEAAAkJAAAICEBAAAJCQAASEgAAEBCAgAAEhIAAJCQAACAhAQAACQkAAAgIQEAAAkJAABISAAAQEICAAASEgAAkJAAAICEBAAAJCQAACAhAQAACQkAAEI5+3Rz3Po3jEAAABDG2el0/sE7D09a/44RCAAAwvjzWw/+s9lMd1v/jhHcaf0DAGCus9Pp3PjvxwUAgOEZ//25AAAwLF/+h3MBAGBYxv9wLgAADMeX/3wuAAAMx/jP5wIAwDB8+S/HBQCAYRj/5bgAANA9X/7LcwEAoHvGf3kuAAB0y5d/PS4AAHTL+NfjAgBAd3z51+cCAEB3jH99LgAAdMOX/3pcAADohvFfjwsAAM1F/vI/OppO7j98/G7r33GVCwAAzcUe/0ev/vKtb33a+rdc5QIAQDPxv/z7HP9pcgEAoCHj344LAACr8+XfngsAAKsz/u25AACwGl/+/XABAGA1xr8fLgAAVOfLvz8uAABUZ/z74wIAQDW+/PvlAgBANca/Xy4AACzOl3//XAAAWJzx758LAACL8eU/DhcAABZj/MfhAgDAbL78x+MCAMBsxn88LgAAHMyX/7hcAAA4mPEflwsAAHvz5T8+FwAA9mb8x+cCAMDOfPnH4QIAwM6MfxwuAAAU+fKPxwUAgCLjH48LAABb+fKPywUAgK2Mf1wuAAA8w5d/fC4AADzD+MfnAgDAl3z55+ECAMCXjH8eLgAA+PJPyAUAAF/+CbkAACTmyz8vFwCAxIx/Xi4AAAn58scFACAh448LAEAivvx5ygUAIBHjz1MuAAAJ+PLnKhcAgASMP1e5AAAE5sufbVwAAAIz/mzjAgAQkC9/SlwAAAIy/pS4AAAE4sufXbkAAARi/NmVCwBAAL782ZcLAEAAxp99uQAADMyXP4dyAQAYmPHnUC4AAAPy5c9cLgAAAzL+zOUCwGLOTqfz1r9hdM+/MB23/g2t+Xd0s7NPN8cfvPPwxPgzlwBgEX/946NXWv+GCF586dZHP/3Fc6+1/h0tnJ1O5++9+eB4mkTQDow/s3kCAJq7MP4kZPzbEADQkaOj1r9gfcY/N+PfjgAAmjH+uRn/tgQA0ITxz834tycAgNUZ/9yMfx8EALAq45+b8e+HAABWY/xzM/59EQDAKox/bsa/PwIAqM7452b8+yQAgKqMf27Gv18CAKjG+Odm/PsmAIAqjH9uxr9/AgBYnPHPzfiPQQAAizL+uRn/cQgAYDHGPzfjPxYBACzC+Odm/McjAIDZjH9uxn9MAgCYxfjnZvzHJQCAgxn/3Iz/2AQAcBDjn5vxH58AAPZm/HMz/jEIAGAvxj834x+HAAB2ZvxzM/6xCABgJ8Y/N+MfjwAAiox/bsY/JgEA3Mj452b84xIAwFbGPzfjH5sAAK5l/HMz/vEJAOAZxj8345+DAAAuMf65Gf88BADwJeOfm/HPRQAA0zQZ/+yMfz4CADD+yRn/nAQAJGf8czP+eQkASMz452b8cxMAkJTxz834IwAgIeOfm/FnmgQApGP8czP+PCUAIBHjn5vx5yIBAEkY/9yMP1cJAEjA+Odm/LmOAIDgjH9uxp9tBAAEZvxzM/7cRABAUMY/N+NPiQCAgIx/bsafXQgACMb452b82ZUAgECMf27Gn30IAAjC+Odm/NmXAIAAjH9uxp9DCAAYnPHPzfhzKAEAAzP+uRl/5hAAMCjjn5vxZy4BAAMy/rkZf5YgAGAwxj83489SBAAMxPjnZvxZkgCAQRj/3Iw/SxMAMADjn5vxpwYBAJ0z/rkZf2oRANAx45+b8acmAQCdMv65GX9qEwDQIeOfm/FnDQIAOrLZGP/sjD9rEQDQkX//88l3jH9exp81CQDoyGYz3W39G2jD+LM2AQDQmPGnBQEA0JDxpxUBANCI8aclAQDQgPGnNQEAsDLjTw8EAMCKjD+9EAAAKzH+9EQAAKzA+NMbAQBQmfGnRwIAoCLjT68EAEAlxp+eCQCACow/vRMAAAsz/oxAAAAsyPgzCgEAsBDjz0gEAMACjD+jEQAAMxl/RiQAAGYw/oxKAAAcyPgzMgEAcADjz+gEAMCejD8RCACAPRh/ohAAADsy/kQiAAB2YPyJRgAAFBh/IhIAADcw/kQlAAC2MP5EJgAArmH8iU4AAFxh/MlAAABcYPzJQgAAfMH4k4kAAJiMP/kIACA9409GAgBIzfiTlQAA0jL+ZCYAgJSMP9kJACAd4w8CAEjG+MPnBACQhvGHrwgAIAXjD5cJACA84w/PEgBAaMYfricAgLCMP2wnAICQjD/c7E7rH3DVg0eP3/36c8+91Pp3sJ+jo+nnm810t/XvyODoaDrZbKY/tP4dvbv/8NHvjD9s110ATNM03XvjG79t/RvYz9uvf/bDaRIAK/jw/sNHPzNswFzdPQH4jw22+vDBI+MPLKO7AACuZfyBRQkA6J/xBxYnAKBvxh+oQgBAv4w/UI0AgD4Zf6AqAQD9Mf5AdQIA+mL8gVUIAOiH8QdWIwCgD8YfWJUAgPaMP7A6AQBtGX+gCQEA7Rh/oBkBAG0Yf6ApAQDrM/5AcwIA1mX8gS4IAFiP8Qe6IQBgHcYf6IoAgPqMP9AdAQB1GX+gSwIA6jH+QLcEANRh/IGuCQBYnvEHuicAYFnGHxiCAIDlGH9gGAIAlmH8gaEIAJjP+APDEQAwj/EHhiQA4HDGHxiWAIDDGH9gaAIA9mf8geEJANiP8QdCEACwO+MPhCEAYDfGHwhFAECZ8QfCEQBwM+MPhCQAYDvjD4QlAOB6xh8ITQDAs4w/EJ4AgMuMP5CCAICvGH8gDQEAnzP+QCoCAIw/kJAAIDvjD6QkAMjM+ANpCQCyMv5AagKAjIw/kJ4AIBvjDzAJAHIx/gBfEABkYfwBLhAAZGD8Aa4QAERn/AGuIQCIzPgDbCEAiMr4A9xAABCR8QcoEABEY/wBdiAAiMT4A+xIABCF8QfYgwAgAuMPsCcBwOiMP8ABBAAjM/4ABxIAjMr4A8wgABiR8QeYSQAwGuMPsAABwEiMP8BCBACjMP4ACxIAjMD4AyxMANA74w9QgQCgZ8YfoBIBQK+MP0BFAoAeGX+AygQAvTH+ACsQAPTE+AOsRADQC+MPsCIBQA+MP8DKBACtGX+ABgQALRl/gEYEAK0Yf4CGBAAtGH+AxgQAazP+AB0QAKzJ+AN0QgCwFuMP0BEBwBqMP0BnBAC1GX+ADgkAajL+AJ0SANRi/AE6JgCowfgDdE4AsDTjDzAAAcCSjD/AIAQAC9n8yfgDjOP/z4P4qfpCqlQAAAAASUVORK5CYII=');  // https://brand.twitch.tv
+loadImg('youtube', 'data:image/png;base64,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'); // https://www.youtube.com/howyoutubeworks/brand-resources
+
+const platforms = {
+  kick:    { draw: (ctx, x, y, size) => drawImgLogo(ctx, 'kick',    x, y, size) },
+  twitch:  { draw: (ctx, x, y, size) => drawImgLogo(ctx, 'twitch',  x, y, size) },
+  youtube: { draw: (ctx, x, y, size) => drawImgLogo(ctx, 'youtube', x, y, size) },
+};
+
+function drawImgLogo(ctx, key, x, y, size) {
+  const img = LOGO_IMGS[key];
+  if (!img) {
+    // Fallback: dibuja un placeholder mientras la imagen no esté cargada
+    ctx.save();
+    ctx.fillStyle = key === 'kick' ? '#53fc18' : key === 'twitch' ? '#9147ff' : '#ff0000';
+    const r = size * 0.15;
+    ctx.beginPath(); roundRect(ctx, x, y, size, size, r); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  ctx.drawImage(img, x, y, size, size);
+}
+
+// ── BADGES OFICIALES — reemplazá cada TU_BASE64_XXX_AQUI con tu string Base64 ──
+// Tamaño recomendado: PNG 28×28px o más, con fondo transparente
+// Fuentes: https://brand.twitch.tv  /  wiki de Kick / YouTube
+
+const BADGE_IMGS = {};
+
+function loadBadge(key, base64) {
+  const img = new Image();
+  img.onload = () => { BADGE_IMGS[key] = img; render(); };
+  img.src = base64;
+}
+
+loadBadge('mod',      'TU_BASE64_MOD_AQUI');
+loadBadge('sub',      'TU_BASE64_SUB_AQUI');
+loadBadge('vip',      'TU_BASE64_VIP_AQUI');
+loadBadge('verified', 'TU_BASE64_VERIFIED_AQUI');
+loadBadge('founder',  'TU_BASE64_FOUNDER_AQUI');
+loadBadge('prime',    'TU_BASE64_PRIME_AQUI');
+
+// Emojis de respaldo (se usan si la imagen aún no cargó)
+const badgeEmoji = { mod:'⚔️', sub:'⭐', vip:'💎', verified:'✅', founder:'🏆', prime:'👑' };
+
+// ═══════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════
+function hexToRgb(hex) {
+  return {
+    r: parseInt(hex.slice(1,3),16),
+    g: parseInt(hex.slice(3,5),16),
+    b: parseInt(hex.slice(5,7),16)
+  };
+}
+
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? line+' '+word : word;
+    if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = word; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('previewCanvas');
+const ctx = canvas.getContext('2d');
+let renderQueued = false;
+
+function render() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; _doRender(1, canvas, ctx); });
+}
+
+function _doRender(scale, tCanvas, tCtx) {
+  // Read DOM → state
+  state.username      = document.getElementById('username').value;
+  state.nametagColor  = document.getElementById('nametagColor').value;
+  state.messageText   = document.getElementById('messageText').value;
+  state.fontFamily    = document.getElementById('fontFamily').value;
+  state.fontSize      = parseInt(document.getElementById('fontSize').value);
+  state.fontWeight    = document.getElementById('fontWeight').value;
+  state.textColor     = document.getElementById('textColor').value;
+  state.lineHeight    = parseFloat(document.getElementById('lineHeight').value);
+  state.borderRadius  = parseInt(document.getElementById('borderRadius').value);
+  state.paddingH      = parseInt(document.getElementById('paddingH').value);
+  state.paddingV      = parseInt(document.getElementById('paddingV').value);
+  state.logoGap       = parseInt(document.getElementById('logoGap').value);
+  state.userMsgGap    = parseInt(document.getElementById('userMsgGap').value);
+  state.borderColor   = document.getElementById('borderColor').value;
+  state.borderWidth   = parseInt(document.getElementById('borderWidth').value);
+  state.shadowBlur    = parseInt(document.getElementById('shadowBlur').value);
+  state.bgColor       = document.getElementById('bgColor').value;
+  state.gradColor1    = document.getElementById('gradColor1').value;
+  state.gradColor2    = document.getElementById('gradColor2').value;
+  state.gradAngle     = parseInt(document.getElementById('gradAngle').value);
+  state.bgAlpha       = parseInt(document.getElementById('bgAlpha').value);
+  state.bgBrightness  = parseInt(document.getElementById('bgBrightness').value);
+  state.bgContrast    = parseInt(document.getElementById('bgContrast').value);
+  state.exportScale   = parseInt(document.getElementById('exportScale').value);
+
+  const s       = scale;
+  const font    = state.fontFamily;
+  const fSize   = state.fontSize * s;
+  const fWeight = state.fontWeight;
+  const pH      = state.paddingH * s;
+  const pV      = state.paddingV * s;
+  const gap     = state.logoGap * s;
+  const umGap   = state.userMsgGap * s;
+  const lineH   = state.lineHeight;
+  const badgeList = [...state.badges];
+  const hasUser = state.showUsername;
+
+  // Logo & nametag sizes
+  const logoSize       = Math.round(fSize * 1.4);
+  const nametagFSize   = Math.round(fSize * 0.72);
+  const lineHeight     = fSize * lineH;
+
+  // Estimate max width for wrapping
+  const previewW = document.getElementById('previewArea').clientWidth;
+  const maxCanvasW = Math.min(previewW * 0.9, 1200) * s;
+  const textColW = maxCanvasW - pH * 2 - logoSize - gap;
+
+  // Measure message lines
+  tCtx.font = `${fWeight} ${fSize}px '${font}', sans-serif`;
+  const msgLines = wrapText(tCtx, state.messageText, textColW);
+  const msgH = msgLines.length * lineHeight;
+
+  // Measure nametag row width (username + badges)
+  let nametagRowW = 0;
+  let nametagH = 0;
+  if (hasUser) {
+    tCtx.font = `700 ${nametagFSize}px '${font}', sans-serif`;
+    nametagRowW = tCtx.measureText(state.username).width
+                  + badgeList.length * (nametagFSize * 1.4);
+    nametagH = nametagFSize * 1.3;
+  }
+
+  // Measure widest message line
+  tCtx.font = `${fWeight} ${fSize}px '${font}', sans-serif`;
+  let maxMsgW = 0;
+  for (const l of msgLines) { const w=tCtx.measureText(l).width; if(w>maxMsgW) maxMsgW=w; }
+
+  // Text column width = max of nametag row and widest message line
+  const contentW = Math.max(nametagRowW, maxMsgW);
+
+  // Total inner height: nametag (if shown) + gap + message
+  let innerH = msgH;
+  if (hasUser) innerH = nametagH + umGap + msgH;
+
+  const totalW = Math.round(pH * 2 + logoSize + gap + contentW);
+  const totalH = Math.round(pV * 2 + innerH);
+
+  tCanvas.width  = totalW;
+  tCanvas.height = totalH;
+
+  if (scale === 1) {
+    const maxDisplayW = Math.min(document.getElementById('previewArea').clientWidth * 0.88, 900);
+    const dScale = Math.min(1, maxDisplayW / totalW);
+    tCanvas.style.width  = (totalW * dScale) + 'px';
+    tCanvas.style.height = (totalH * dScale) + 'px';
+    document.getElementById('dimensionLabel').textContent =
+      `${totalW}×${totalH}px preview · export: ${totalW*state.exportScale}×${totalH*state.exportScale}px`;
+  }
+
+  const c = tCtx;
+  c.clearRect(0, 0, totalW, totalH);
+
+  // ── BACKGROUND ──
+  if (state.bgMode !== 'transparent') {
+    const alpha = state.bgAlpha / 100;
+    let fillStyle;
+
+    if (state.bgMode === 'solid') {
+      const { r, g, b } = hexToRgb(state.bgColor);
+      const br = state.bgBrightness / 100, cr = state.bgContrast / 100;
+      const bc = v => { let x=v/255*br; x=(x-.5)*cr+.5; return Math.round(Math.max(0,Math.min(1,x))*255); };
+      fillStyle = `rgba(${bc(r)},${bc(g)},${bc(b)},${alpha})`;
+    } else {
+      const angleRad = (state.gradAngle-90)*Math.PI/180;
+      const cx0=totalW/2-Math.cos(angleRad)*totalW/2, cy0=totalH/2-Math.sin(angleRad)*totalH/2;
+      const cx1=totalW/2+Math.cos(angleRad)*totalW/2, cy1=totalH/2+Math.sin(angleRad)*totalH/2;
+      const grad = c.createLinearGradient(cx0,cy0,cx1,cy1);
+      const {r:r1,g:g1,b:b1}=hexToRgb(state.gradColor1);
+      const {r:r2,g:g2,b:b2}=hexToRgb(state.gradColor2);
+      grad.addColorStop(0,`rgba(${r1},${g1},${b1},${alpha})`);
+      grad.addColorStop(1,`rgba(${r2},${g2},${b2},${alpha})`);
+      fillStyle = grad;
+    }
+
+    if (state.shadowBlur > 0) {
+      c.shadowColor='rgba(0,0,0,0.5)'; c.shadowBlur=state.shadowBlur*s;
+      c.shadowOffsetY=state.shadowBlur*s*0.3;
+    }
+    const rad = state.borderRadius * s;
+    c.beginPath(); roundRect(c,0,0,totalW,totalH,rad);
+    c.fillStyle = fillStyle; c.fill();
+    c.shadowColor='transparent'; c.shadowBlur=0; c.shadowOffsetY=0;
+
+    if (state.showBorder) {
+      c.beginPath(); roundRect(c,0,0,totalW,totalH,rad);
+      c.strokeStyle=state.borderColor; c.lineWidth=state.borderWidth*s; c.stroke();
+    }
+  }
+
+  // ── LOGO — vertically centered to full container ──
+  const logoX = pH;
+  const logoY = Math.round((totalH - logoSize) / 2);
+  platforms[state.platform].draw(c, logoX, logoY, logoSize);
+
+  // ── TEXT COLUMN — starts right of logo ──
+  const textX = pH + logoSize + gap;
+  // Vertically center the entire text block (nametag + gap + message)
+  let cursorY = Math.round((totalH - innerH) / 2);
+
+  // ── USERNAME ROW ──
+  if (hasUser) {
+    c.font = `700 ${nametagFSize}px '${font}', sans-serif`;
+    c.fillStyle = state.nametagColor;
+    c.textBaseline = 'top';
+    c.fillText(state.username, textX, cursorY);
+
+    // Badges after name
+    const nW = c.measureText(state.username).width;
+    let bX = textX + nW + nametagFSize * 0.35;
+    for (const badge of badgeList) {
+      const bImg = BADGE_IMGS[badge];
+      const bSize = Math.round(nametagFSize * 1.1);
+      if (bImg) {
+        // Imagen oficial cargada → la dibujamos
+        c.drawImage(bImg, bX, cursorY, bSize, bSize);
+      } else {
+        // Fallback a emoji mientras la imagen no esté lista
+        c.font = `${Math.round(nametagFSize*0.9)}px 'Segoe UI Emoji', sans-serif`;
+        c.fillStyle = '#ffffff';
+        c.fillText(badgeEmoji[badge], bX, cursorY + nametagFSize*0.05);
+      }
+      bX += bSize + nametagFSize * 0.25;
+    }
+
+    cursorY += nametagH + umGap;
+  }
+
+  // ── MESSAGE LINES ──
+  c.font = `${fWeight} ${fSize}px '${font}', sans-serif`;
+  c.fillStyle = state.textColor;
+  c.textBaseline = 'middle'; // 'middle' da centrado óptico real vs 'top'
+  for (const line of msgLines) {
+    c.fillText(line, textX, cursorY + lineHeight / 2);
+    cursorY += lineHeight;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════
+function exportImage() {
+  const exportCanvas = document.createElement('canvas');
+  const exportCtx = exportCanvas.getContext('2d');
+  _doRender(state.exportScale, exportCanvas, exportCtx);
+  const link = document.createElement('a');
+  link.download = `chat-overlay-${state.platform}-${Date.now()}.png`;
+  link.href = exportCanvas.toDataURL('image/png');
+  link.click();
+}
+
+// ═══════════════════════════════════════════════════════
+// RESET PER SECTION
+// ═══════════════════════════════════════════════════════
+function resetSection(section) {
+  const d = DEFAULTS[section];
+
+  if (section === 'platform') {
+    state.platform = d.platform;
+    document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.platform-btn.${d.platform}`).classList.add('active');
+  }
+
+  if (section === 'user') {
+    state.showUsername = d.showUsername;
+    document.getElementById('toggleUsername').classList.toggle('on', state.showUsername);
+    document.getElementById('usernameFields').style.display = '';
+    document.getElementById('nametagColorField').style.display = '';
+    document.getElementById('username').value = d.username;
+    setColor('nametagColor', 'swatchNametag', 'nametagColorHex', d.nametagColor);
+    // Clear badges
+    state.badges = new Set();
+    document.querySelectorAll('.badge-chip').forEach(c => c.classList.remove('active'));
+  }
+
+  if (section === 'message') {
+    document.getElementById('messageText').value = d.messageText;
+    setSelect('fontFamily', d.fontFamily);
+    setRange('fontSize', 'fontSizeVal', d.fontSize, 'px');
+    setSelect('fontWeight', d.fontWeight);
+    setColor('textColor', 'swatchText', 'textColorHex', d.textColor);
+    setRange('lineHeight', 'lineHeightVal', d.lineHeight, '', true);
+  }
+
+  if (section === 'container') {
+    setRange('borderRadius', 'borderRadiusVal', d.borderRadius);
+    setRange('paddingH', 'paddingHVal', d.paddingH);
+    setRange('paddingV', 'paddingVVal', d.paddingV);
+    setRange('logoGap', 'logoGapVal', d.logoGap);
+    setRange('userMsgGap', 'userMsgGapVal', d.userMsgGap);
+    state.showBorder = d.showBorder;
+    document.getElementById('toggleBorder').classList.toggle('on', false);
+    document.getElementById('borderFields').style.display = 'none';
+    setRange('borderWidth', 'borderWidthVal', d.borderWidth);
+    setColor('borderColor', 'swatchBorder', 'borderColorHex', d.borderColor);
+    setRange('shadowBlur', 'shadowBlurVal', d.shadowBlur);
+  }
+
+  if (section === 'background') {
+    setSelect('bgMode', d.bgMode);
+    updateBgMode();
+    setColor('bgColor', 'swatchBg', 'bgColorHex', d.bgColor);
+    setColor('gradColor1', 'swatchGrad1', 'gradColor1Hex', d.gradColor1);
+    setColor('gradColor2', 'swatchGrad2', 'gradColor2Hex', d.gradColor2);
+    setRange('gradAngle', 'gradAngleVal', d.gradAngle, '°');
+    setRange('bgAlpha', 'bgAlphaVal', d.bgAlpha, '%');
+    setRange('bgBrightness', 'bgBrightnessVal', d.bgBrightness, '%');
+    setRange('bgContrast', 'bgContrastVal', d.bgContrast, '%');
+  }
+
+  if (section === 'export') {
+    setSelect('exportScale', d.exportScale);
+    updateExportBadge();
+  }
+
+  render();
+}
+
+// Helpers for reset
+function setRange(id, labelId, val, suffix='px', isFloat=false) {
+  document.getElementById(id).value = val;
+  document.getElementById(labelId).textContent = (isFloat ? parseFloat(val).toFixed(2) : val) + suffix;
+}
+function setSelect(id, val) {
+  const el = document.getElementById(id);
+  el.value = val;
+}
+function setColor(inputId, swatchId, hexId, val) {
+  document.getElementById(inputId).value = val;
+  document.getElementById(swatchId).style.background = val;
+  const hexEl = document.getElementById(hexId);
+  if (hexEl) hexEl.value = val;
+}
+
+// ═══════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════
+function setPlatform(platform, btn) {
+  state.platform = platform;
+  document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function toggleBadge(chip) {
+  const badge = chip.dataset.badge;
+  if (state.badges.has(badge)) { state.badges.delete(badge); chip.classList.remove('active'); }
+  else { state.badges.add(badge); chip.classList.add('active'); }
+  render();
+}
+
+function toggleSection(header) {
+  const content = header.nextElementSibling;
+  const toggle = header.querySelector('.section-toggle');
+  content.classList.toggle('collapsed');
+  toggle.textContent = content.classList.contains('collapsed') ? '▸' : '▾';
+}
+
+function toggleCtrl(stateKey, toggleId) {
+  state[stateKey] = !state[stateKey];
+  document.getElementById(toggleId).classList.toggle('on', state[stateKey]);
+  if (stateKey === 'showUsername') {
+    document.getElementById('usernameFields').style.display   = state.showUsername ? '' : 'none';
+    document.getElementById('nametagColorField').style.display = state.showUsername ? '' : 'none';
+  }
+  if (stateKey === 'showBorder') {
+    document.getElementById('borderFields').style.display = state.showBorder ? '' : 'none';
+  }
+  render();
+}
+
+function syncVal(inputId, labelId, suffix='px') {
+  document.getElementById(labelId).textContent = document.getElementById(inputId).value + suffix;
+}
+function syncValFloat(inputId, labelId) {
+  document.getElementById(labelId).textContent = parseFloat(document.getElementById(inputId).value).toFixed(2);
+}
+function syncSwatch(inputId, swatchId) {
+  const val = document.getElementById(inputId).value;
+  document.getElementById(swatchId).style.background = val;
+  const hexEl = document.getElementById(inputId + 'Hex');
+  if (hexEl) hexEl.value = val;
+}
+function syncColorFromHex(colorInputId, hexInputId, swatchId) {
+  const hex = document.getElementById(hexInputId).value;
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    document.getElementById(colorInputId).value = hex;
+    document.getElementById(swatchId).style.background = hex;
+  }
+}
+function updateBgMode() {
+  const mode = document.getElementById('bgMode').value;
+  state.bgMode = mode;
+  document.getElementById('bgSolidFields').style.display    = mode === 'solid'     ? '' : 'none';
+  document.getElementById('bgGradientFields').style.display = mode === 'gradient'  ? '' : 'none';
+}
+function updateExportBadge() {
+  const s = document.getElementById('exportScale').value;
+  document.getElementById('scaleBadge').textContent = `Export: ${s}x · ${s >= 4 ? '4K' : s+'x HD'}`;
+}
+function setPreviewBg(btn, color) {
+  document.querySelectorAll('.bg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const pa = document.getElementById('previewArea');
+  pa.style.background = color === 'checker'
+    ? 'repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 0 0 / 24px 24px'
+    : color;
+}
+
+// ═══════════════════════════════════════════════════════
+// RESIZE SIDEBAR
+// ═══════════════════════════════════════════════════════
+(function() {
+  const handle = document.getElementById('resizeHandle');
+  const sidebar = document.getElementById('sidebar');
+  let dragging = false;
+  handle.addEventListener('mousedown', () => { dragging = true; });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    sidebar.style.width = Math.max(260, Math.min(480, e.clientX)) + 'px';
+    render();
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+async function init() {
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  render();
+}
+window.addEventListener('resize', render);
+init();
+</script>
+</body>
+</html>
