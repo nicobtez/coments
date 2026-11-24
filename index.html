@@ -447,6 +447,7 @@
   .section-icon.style { background: rgba(255,180,80,0.1); }
   .section-icon.bg { background: rgba(255,77,106,0.1); }
   .section-icon.export { background: rgba(255,200,80,0.1); }
+.hdr-export{width:172px;height:44px;box-sizing:border-box;padding:0 14px;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -471,7 +472,7 @@
     </svg>
     Copiar PNG
   </button>
-  <button class="export-btn" onclick="exportImage()">
+  <button class="export-btn hdr-export" onclick="exportImage()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="7 10 12 15 17 10"/>
@@ -479,6 +480,7 @@
     </svg>
     Exportar PNG 4K
   </button>
+  <button class="export-btn hdr-export" data-vidbtn onclick="exportVideoSingle()" title="Video con transparencia y animación" style="background:linear-gradient(135deg,#06b6d4,#0e7490)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="5" width="14" height="14" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></svg>Exportar MOV</button>
 </header>
 
 <!-- PRESETS PANEL -->
@@ -1148,31 +1150,7 @@
         <div class="font-upload-name">Escribí :nombre: en el mensaje</div></div>
       </div>
       <div class="badges-grid" id="emoteList"></div>
-      <span class="info-tag">El nombre sale del archivo (solo letras, números y _). Los GIF usan su primer cuadro. Se guardan en este navegador y también funcionan en el modo lote.</span>
-    </div>
-  </div>
-
-  <!-- BATCH -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-header-left" onclick="toggleSection(this.closest('.section-header'))">
-        <div class="section-icon" style="background:linear-gradient(135deg,#10b981,#059669)">📦</div>
-        <span class="section-title">Modo lote</span>
-        <span class="section-toggle">▾</span>
-      </div>
-    </div>
-    <div class="section-content">
-      <div class="field">
-        <label class="field-label">Un mensaje por línea</label>
-        <textarea id="batchText" style="min-height:130px" oninput="updateBatchCount()" placeholder="china: hola a todos&#10;12:34 pepe: qué buen stream&#10;mensaje sin usuario"></textarea>
-      </div>
-      <div class="toggle-row">
-        <span class="toggle-label">Detectar «usuario: mensaje»</span>
-        <div class="toggle on" id="toggleBatchParse" onclick="toggleCtrl('batchParse','toggleBatchParse');updateBatchCount()"></div>
-      </div>
-      <span class="info-tag" id="batchCount">0 mensajes</span>
-      <span class="info-tag">Usa el estilo actual (plataforma, fuente, fondo, escala). También acepta una hora delante (12:34) y \n para saltos de línea dentro de un mensaje. Descarga un ZIP con un PNG por mensaje.</span>
-      <button class="export-btn" id="batchBtn" onclick="exportBatch()" style="justify-content:center">Exportar lote (ZIP)</button>
+      <span class="info-tag">El nombre sale del archivo (solo letras, números y _). Los GIF usan su primer cuadro. Se guardan en este navegador.</span>
     </div>
   </div>
 
@@ -1561,7 +1539,7 @@ function readState(ov) {
   state.bgContrast    = parseInt(document.getElementById('bgContrast').value);
   state.exportScale   = parseInt(document.getElementById('exportScale').value);
   state.maxWidth      = parseInt(document.getElementById('maxWidth').value);
-  // Override solo para exportar (modo lote): el próximo render vuelve a leer el DOM
+  // Override solo para exportar (video): el próximo render vuelve a leer el DOM
   if (ov) { state.messageText = ov.text; if (ov.user) state.username = ov.user; }
 }
 
@@ -1846,105 +1824,6 @@ async function copyImage() {
   }
 }
 
-// ── MODO LOTE ──
-state.batchParse = true;
-
-function parseBatch() {
-  const re = /^\s*(?:\[?\d{1,2}:\d{2}(?::\d{2})?\]?\s*)?([^\s:]{1,25}):\s+(.+)$/;
-  const out = [];
-  for (let line of document.getElementById('batchText').value.split(/\r?\n/)) {
-    line = line.trim();
-    if (!line) continue;
-    let user = null, text = line;
-    if (state.batchParse) {
-      const m = line.match(re);
-      if (m) { user = m[1]; text = m[2]; }
-    }
-    out.push({ user, text: text.replace(/\\n/g, '\n') });
-  }
-  return out;
-}
-
-function updateBatchCount() {
-  const items = parseBatch();
-  const n = items.length;
-  document.getElementById('batchCount').textContent =
-    `${n} ${n === 1 ? 'mensaje' : 'mensajes'}` +
-    (state.batchParse ? ` · ${items.filter(i => i.user).length} con usuario` : '');
-}
-
-function slugify(t, max = 28) {
-  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, max) || 'mensaje';
-}
-
-async function exportBatch() {
-  const items = parseBatch();
-  if (!items.length) { alert('Escribí al menos un mensaje en el modo lote.'); return; }
-  if (items.length > 200 && !confirm(`Son ${items.length} mensajes y puede tardar. ¿Continuar?`)) return;
-  const btn = document.getElementById('batchBtn');
-  const orig = btn.textContent;
-  btn.disabled = true;
-  try {
-    await ensureFont(items.map(i => i.text + (i.user || '')).join(''));
-    const files = [];
-    for (let i = 0; i < items.length; i++) {
-      btn.textContent = `Generando ${i + 1}/${items.length}…`;
-      await new Promise(r => setTimeout(r, 0)); // deja respirar a la interfaz
-      const blob = await canvasToBlob(renderExportCanvas(items[i]));
-      const name = `${String(i + 1).padStart(3, '0')}_${slugify((items[i].user ? items[i].user + '-' : '') + items[i].text)}.png`;
-      files.push({ name, data: new Uint8Array(await blob.arrayBuffer()) });
-    }
-    downloadBlob(buildZip(files), `chat-overlays-${state.platform}-${Date.now()}.zip`);
-    render(); // restaura el preview con el mensaje del editor
-  } catch (e) {
-    console.error(e);
-    alert('Falló la exportación del lote: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = orig;
-  }
-}
-
-// ZIP mínimo (sin compresión: los PNG ya vienen comprimidos), sin librerías externas
-const _crcTable = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
-  return t;
-})();
-function crc32(u8) {
-  let c = 0xFFFFFFFF;
-  for (let i = 0; i < u8.length; i++) c = _crcTable[(c ^ u8[i]) & 255] ^ (c >>> 8);
-  return (c ^ 0xFFFFFFFF) >>> 0;
-}
-function buildZip(files) {
-  const enc = new TextEncoder(), chunks = [], central = [];
-  const now = new Date();
-  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
-  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
-  let offset = 0;
-  for (const f of files) {
-    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
-    const lh = new DataView(new ArrayBuffer(30));
-    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
-    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true);
-    lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
-    lh.setUint16(26, name.length, true);
-    chunks.push(new Uint8Array(lh.buffer), name, f.data);
-    const ch = new DataView(new ArrayBuffer(46));
-    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
-    ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true);
-    ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
-    ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
-    central.push(new Uint8Array(ch.buffer), name);
-    offset += 30 + name.length + size;
-  }
-  let cdSize = 0; for (const c of central) cdSize += c.length;
-  const end = new DataView(new ArrayBuffer(22));
-  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
-  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
-  return new Blob([...chunks, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
-}
 
 // ═══════════════════════════════════════════════════════
 // RESET PER SECTION
@@ -2832,14 +2711,14 @@ const SECTIONS = {
 };
 const R = (key, sec, label, def, min, max, step, unit, extra) => ({ key, sec, type:'range', label, def, min, max, step, unit, ...extra });
 CONTROLS.push(
-  R('animIn','anim','Duración de entrada',600,100,2000,50,'ms'),
+  R('clipDur','anim','Duración del clip',6,2,20,0.5,'s',{ showIf:'!animHoldAuto' }),
+  { key:'animHoldAuto', sec:'anim', type:'toggle', label:'Ajustar según el largo del mensaje', def:false },
+  R('animInSec','anim','Duración de la entrada',0.6,0.2,2,0.1,'s'),
   { key:'animEase', sec:'anim', type:'select', label:'Curva de entrada', def:'outBack',
     opts:[['outBack','Rebote suave'],['outCubic','Frenado suave'],['outExpo','Frenado fuerte']] },
-  { key:'animHoldAuto', sec:'anim', type:'toggle', label:'Lectura automática (según palabras)', def:true },
-  R('animHold','anim','Duración de lectura',4,1,20,0.5,'s',{ showIf:'!animHoldAuto' }),
-  R('animOut','anim','Duración de salida',500,100,2000,50,'ms'),
+  R('animOutSec','anim','Duración de la salida',0.5,0.2,2,0.1,'s'),
   R('animFloat','anim','Flotación vertical',8,0,40,1,'px'),
-  R('animFloatSpeed','anim','Velocidad de flotación',0.8,0.2,3,0.1,'Hz'),
+  R('animPeriod','anim','Duración de cada vaivén',1.3,0.5,5,0.1,'s'),
   R('animTilt','anim','Inclinación',0.6,0,5,0.1,'°'),
   R('animShake','anim','Shake',1.5,0,10,0.5,'px'),
   R('animPosX','anim','Posición X en el video',50,0,100,1,'%'),
@@ -2849,10 +2728,10 @@ CONTROLS.push(
   { key:'vidFps', sec:'anim', type:'select', label:'FPS', def:'30', opts:[['30','30'],['60','60']] },
   { key:'vidCodec', sec:'anim', type:'select', label:'Formato (MOV con transparencia)', def:'qtrle', opts:[['qtrle','QuickTime Animation (rápido)'],['prores','ProRes 4444 (máxima calidad, lento)']] },
   R('sndInVol','sound','Volumen de entrada',100,0,200,5,'%'),
-  R('sndInOff','sound','Desfase de entrada',0,-500,1000,10,'ms'),
+  R('sndInOffS','sound','Retraso del sonido de entrada',0,0,1,0.05,'s'),
   { key:'sndOutSame', sec:'sound', type:'toggle', label:'Salida = entrada en reversa', def:true },
   R('sndOutVol','sound','Volumen de salida',100,0,200,5,'%'),
-  R('sndOutOff','sound','Desfase de salida',0,-1000,1000,10,'ms')
+  R('sndOutOffS','sound','Ajuste del sonido de salida (− antes, + después)',0,-1,1,0.05,'s')
 );
 SHARE_KEYS.push(...CONTROLS.map(c => c.key));
 for (const c of CONTROLS) state[c.key] = c.def;
@@ -2977,8 +2856,7 @@ function scheduleAutosave() {
       localStorage.setItem('streamkit_autosave', JSON.stringify({
         cfg: getShareableState(),
         msg: document.getElementById('messageText').value,
-        user: document.getElementById('username').value,
-        batch: document.getElementById('batchText').value }));
+        user: document.getElementById('username').value }));
     } catch (e) {}
   }, 400);
 }
@@ -2989,8 +2867,6 @@ function restoreAutosave() {
     applyConfig(a.cfg);
     document.getElementById('messageText').value = a.msg || '';
     document.getElementById('username').value = a.user || '';
-    document.getElementById('batchText').value = a.batch || '';
-    updateBatchCount();
   } catch (e) { console.warn('No se pudo restaurar la sesión:', e); }
 }
 document.addEventListener('keydown', e => {
@@ -3012,10 +2888,13 @@ const EASES = { outBack: t => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.
                 outCubic: t => 1 - Math.pow(1 - t, 3), outExpo: t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t) };
 
 function animTimes(text) {
-  const words = text.trim().split(/\s+/).filter(Boolean).length || 1;
-  const hold = state.animHoldAuto ? Math.min(15, Math.max(2.5, 1.5 + words * 0.32)) : state.animHold;
-  const inD = state.animIn / 1000, outD = state.animOut / 1000;
-  return { inD, outD, hold, total: inD + hold + outD };
+  const inD = state.animInSec, outD = state.animOutSec;
+  let total;
+  if (state.animHoldAuto) {                 // según las palabras del mensaje
+    const words = text.trim().split(/\s+/).filter(Boolean).length || 1;
+    total = inD + outD + Math.min(15, Math.max(2.5, 1.5 + words * 0.32));
+  } else total = Math.max(state.clipDur, inD + outD + 0.5);
+  return { inD, outD, hold: total - inD - outD, total };
 }
 function renderOverlayAt(s, ov) {
   if (Math.abs(s - 1) < 1e-6) s = 1.000001;
@@ -3030,7 +2909,7 @@ function drawClipFrame(ctx, o, W, H, t, A, k) {
   else if (t > A.total - A.outD) { const u = Math.min(1, (t - (A.total - A.outD)) / A.outD); off = u * u * u; }
   const w = Math.max(0, Math.min(1, 1 - Math.abs(off)));
   const cx = W * state.animPosX / 100, cy = H * state.animPosY / 100, dist = H - cy + o.height / 2 + 20 * k;
-  const sh = state.animShake * k, sp = 2 * Math.PI * state.animFloatSpeed;
+  const sh = state.animShake * k, sp = 2 * Math.PI / state.animPeriod;
   const dy = off * dist + w * state.animFloat * k * Math.sin(sp * t) + w * sh * (Math.sin(t * 23.7 + 1) + Math.sin(t * 31.9)) / 2;
   const dx = w * sh * (Math.sin(t * 17.3) + Math.sin(t * 29.1 + 2)) / 2;
   const rot = w * state.animTilt * Math.PI / 180 * Math.sin(sp * 0.7 * t + 1);
@@ -3057,9 +2936,9 @@ function reverseBuf(b) {
 }
 function soundPlan(A) {
   const plan = [];
-  if (AUDIO.in) plan.push({ buf: AUDIO.in.buf, at: Math.max(0, state.sndInOff / 1000), gain: state.sndInVol / 100 });
+  if (AUDIO.in) plan.push({ buf: AUDIO.in.buf, at: Math.max(0, state.sndInOffS), gain: state.sndInVol / 100 });
   const ob = state.sndOutSame ? (AUDIO.in && reverseBuf(AUDIO.in.buf)) : (AUDIO.out && AUDIO.out.buf);
-  if (ob) plan.push({ buf: ob, at: Math.max(0, A.total - A.outD + state.sndOutOff / 1000), gain: state.sndOutVol / 100 });
+  if (ob) plan.push({ buf: ob, at: Math.max(0, A.total - A.outD + state.sndOutOffS), gain: state.sndOutVol / 100 });
   return plan;
 }
 function wavBytes(b) {
@@ -3116,6 +2995,7 @@ async function makeClip(ov, label) {
   const fc = Object.assign(document.createElement('canvas'), { width: W, height: H }), fx = fc.getContext('2d'), names = [];
   try {
     for (let i = 0; i < n; i++) {
+      fx.clearRect(0, 0, W, H);   // sin esto los frames anteriores quedan dibujados (estela)
       drawClipFrame(fx, o, W, H, i / fps, A, k);
       const blob = await new Promise(r => fc.toBlob(r, 'image/png'));
       const nm = `f${String(i).padStart(5, '0')}.png`;
@@ -3146,15 +3026,6 @@ const exportVideoSingle = () => runVideoJob(async () => {
   const d = await makeClip(null, 'Video');
   downloadBlob(new Blob([d], { type: 'video/quicktime' }), `overlay-${state.platform}-${Date.now()}.mov`);
 });
-const exportBatchVideo = () => runVideoJob(async () => {
-  const items = parseBatch(); if (!items.length) { alert('Escribí al menos un mensaje en el modo lote.'); return; }
-  await ensureFont(items.map(i => i.text + (i.user || '')).join('')); const files = [];
-  for (let i = 0; i < items.length; i++) {
-    const d = await makeClip(items[i], `Clip ${i + 1}/${items.length}`);
-    files.push({ name: `${String(i + 1).padStart(3, '0')}_${slugify((items[i].user ? items[i].user + '-' : '') + items[i].text)}.mov`, data: new Uint8Array(d) });
-  }
-  downloadBlob(buildZip(files), `chat-overlays-video-${Date.now()}.zip`); render();
-});
 
 // ── Preview animado en vivo (con sonido) ──
 let _prev = null;
@@ -3164,7 +3035,7 @@ function stopAnimPreview() {
 }
 function startAnimPreview() {
   const box = document.createElement('div');
-  box.style.cssText = 'position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.88)';
+  box.style.cssText = 'position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.88)';
   const cv = document.createElement('canvas'); cv.width = 960; cv.height = 540;
   cv.style.cssText = 'max-width:96%;max-height:92%;aspect-ratio:16/9;border:1px solid #333;background:#16161c';
   box.appendChild(cv); document.getElementById('previewArea').appendChild(box);
@@ -3190,9 +3061,9 @@ const toggleAnimPreview = () => _prev ? stopAnimPreview() : startAnimPreview();
 
 function buildAnimExtras() {
   document.getElementById('animContent').insertAdjacentHTML('afterbegin',
-    `<div style="display:flex;gap:8px"><button class="share-btn" id="animPrevBtn" onclick="toggleAnimPreview()">▶ Previsualizar</button>
-     <button class="export-btn" data-vidbtn onclick="exportVideoSingle()" style="flex:1;justify-content:center">🎬 Exportar video MOV</button></div>
-     <span class="info-tag">Video con transparencia: arrástralo a Premiere sobre tu clip. Con 🖼 (arriba a la derecha del preview) puedes usar un frame de tu video de fondo para acomodar la posición.</span>`);
+    `<span class="info-tag">Acá se configura cómo se mueve el cartel y su sonido. El mensaje y su aspecto se editan en la pestaña 🎨 Diseño.</span>
+     <button class="share-btn" id="animPrevBtn" onclick="toggleAnimPreview()" style="width:100%;justify-content:center">▶ Previsualizar</button>
+     <span class="info-tag">El video se exporta con el botón 🎬 Exportar MOV de arriba (con transparencia, listo para arrastrar a Premiere). Con 🖼 (arriba a la derecha del preview) puedes usar un frame de tu video de fondo para acomodar la posición.</span>`);
   document.getElementById('sndContent') || 0;
   document.getElementById('soundContent').insertAdjacentHTML('afterbegin',
     `<div class="field"><label class="field-label">Sonido de entrada</label>
@@ -3202,10 +3073,32 @@ function buildAnimExtras() {
        <input type="file" accept="audio/*" onchange="onAudioFile('out',this)">
        <span class="info-tag" id="sndOutName">Sin archivo</span></div>
      <span class="info-tag">Los audios no se guardan en los presets. Se mezclan dentro del MOV.</span>`);
-  document.getElementById('batchBtn').insertAdjacentHTML('afterend',
-    `<button class="export-btn" id="batchVidBtn" data-vidbtn onclick="exportBatchVideo()" style="justify-content:center">🎬 Exportar lote (videos MOV)</button>`);
 }
 buildAnimExtras();
+
+function buildModeTabs() {
+  const first = document.querySelector('.section'), side = first.parentElement;
+  const ANIM = ['Animación y video', 'Sonido'];
+  document.querySelectorAll('.section').forEach(sec => {
+    const t = sec.querySelector('.section-title'); sec.dataset.tab = t && ANIM.includes(t.textContent) ? 'anim' : 'design';
+  });
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:6px;padding:10px 12px;position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border)';
+  bar.innerHTML = [['design', '🎨 Diseño'], ['anim', '🎞️ Animación']].map(([id, t]) =>
+    `<button data-mode="${id}" onclick="setMode('${id}')" style="flex:1;padding:10px;border:0;border-radius:8px;font:700 13px var(--font-ui);cursor:pointer">${t}</button>`).join('');
+  side.insertBefore(bar, first);
+  const tg = document.querySelector('.bg-btn').parentElement;           // los botones de fondo siempre por encima del preview animado
+  if (getComputedStyle(tg).position === 'static') tg.style.position = 'relative'; tg.style.zIndex = 7;
+  setMode('design');
+}
+function setMode(m) {
+  document.querySelectorAll('.section').forEach(sec => sec.style.display = sec.dataset.tab === m ? '' : 'none');
+  document.querySelectorAll('[data-mode]').forEach(b => {
+    const on = b.dataset.mode === m; b.style.background = on ? (b.dataset.mode === 'anim' ? 'linear-gradient(135deg,#06b6d4,#0e7490)' : 'var(--accent)') : 'var(--surface2)'; b.style.color = on ? '#fff' : 'var(--text2)';
+  });
+  if (m === 'anim') { if (!_prev) startAnimPreview(); } else stopAnimPreview();
+}
+buildModeTabs();
 
 window.addEventListener('resize', render);
 init();
