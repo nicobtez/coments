@@ -2150,36 +2150,40 @@ function renderPresetsList() {
   }
   list.innerHTML = presets.map((p, i) => `
     <div class="preset-item ${i === activePresetIdx ? 'active' : ''}" onclick="loadPreset(${i})">
-      <span class="preset-item-name">${esc(p.name)}</span>
+      <span class="preset-item-name">${esc(p.name)}${p.assets && p.assets.length ? ' <span title="Incluye fuente y/o audios guardados">📎</span>' : ''}</span>
       <span class="preset-item-actions">
-        <button class="preset-action-btn" title="Copiar código" onclick="copyPresetCode(event,${i})">📋</button>
+        <button class="preset-action-btn" title="Copiar código (no incluye fuente ni audios)" onclick="copyPresetCode(event,${i})">📋</button>
         <button class="preset-action-btn del" title="Eliminar" onclick="deletePreset(event,${i})">🗑</button>
       </span>
     </div>
   `).join('');
 }
 
-function saveCurrentPreset() {
+async function saveCurrentPreset() {
   const nameInput = document.getElementById('presetNameInput');
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
-  const config = getShareableState();
-  presets.push({ name, config });
+  const id = 'p' + Date.now().toString(36);
+  const assets = await saveAssets('preset:' + id);        // fuente y audios que haya cargados
+  presets.push({ id, name, config: getShareableState(), assets });
   savePresetsToStorage();
   nameInput.value = '';
   activePresetIdx = presets.length - 1;
   renderPresetsList();
 }
 
-function loadPreset(idx) {
+async function loadPreset(idx) {
+  const p = presets[idx];
+  if (p.id && p.assets && p.assets.length) await restoreAssets('preset:' + p.id);   // antes de aplicar la config
   activePresetIdx = idx;
-  applyConfig(presets[idx].config);
+  applyConfig(p.config);
   renderPresetsList();
 }
 
 function deletePreset(e, idx) {
   e.stopPropagation();
   if (!confirm(`¿Eliminar el preset "${presets[idx].name}"?`)) return;
+  if (presets[idx].id) deleteAssets('preset:' + presets[idx].id);
   presets.splice(idx, 1);
   if (activePresetIdx >= presets.length) activePresetIdx = -1;
   savePresetsToStorage();
@@ -2262,6 +2266,7 @@ function onLogoHSlider() {
 
 const CUSTOM_FONT_NAME = '__StreamKitCustomFont__';
 let customFontLoaded = false;
+let _fontAsset = null;   // { name, dataUrl } de la fuente subida (para guardarla)
 
 function onFontSelectChange() {
   // Si el usuario elige una fuente del sistema, desactiva la custom
@@ -2272,44 +2277,27 @@ function onFontSelectChange() {
 function loadCustomFont(input) {
   const file = input.files[0];
   if (!file) return;
-
   const reader = new FileReader();
-  reader.onload = function(e) {
-    const base64 = e.target.result; // data:font/ttf;base64,...
-
-    // Inyectar @font-face dinámico
-    let styleEl = document.getElementById('customFontStyle');
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = 'customFontStyle';
-      document.head.appendChild(styleEl);
-    }
-    styleEl.textContent = `@font-face {
-      font-family: '${CUSTOM_FONT_NAME}';
-      src: url('${base64}');
-      font-weight: 100 900;
-    }`;
-
-    // Esperar a que la fuente cargue antes de renderizar
-    document.fonts.load(`16px '${CUSTOM_FONT_NAME}'`).then(() => {
-      customFontLoaded = true;
-      state.fontFamily = CUSTOM_FONT_NAME;
-
-      // UI feedback
-      const area = document.getElementById('fontUploadArea');
-      area.classList.add('has-font');
-      document.getElementById('fontUploadName').textContent = file.name;
-      document.getElementById('fontRemoveBtn').style.display = 'block';
-
-      // Deshabilitar el select mientras hay fuente custom
-      document.getElementById('fontFamily').disabled = true;
-
-      render();
-    });
-  };
+  reader.onload = e => installCustomFont(e.target.result, file.name);
   reader.readAsDataURL(file);
-  // Reset input para permitir subir el mismo archivo de nuevo
   input.value = '';
+}
+
+function installCustomFont(dataUrl, name, quiet) {
+  _fontAsset = { name, dataUrl };
+  let styleEl = document.getElementById('customFontStyle');
+  if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'customFontStyle'; document.head.appendChild(styleEl); }
+  styleEl.textContent = `@font-face { font-family: '${CUSTOM_FONT_NAME}'; src: url('${dataUrl}'); font-weight: 100 900; }`;
+  return document.fonts.load(`16px '${CUSTOM_FONT_NAME}'`).then(() => {
+    customFontLoaded = true;
+    state.fontFamily = CUSTOM_FONT_NAME;
+    document.getElementById('fontUploadArea').classList.add('has-font');
+    document.getElementById('fontUploadName').textContent = name;
+    document.getElementById('fontRemoveBtn').style.display = 'block';
+    document.getElementById('fontFamily').disabled = true;
+    render();
+    if (!quiet) persistSession();
+  });
 }
 
 function removeCustomFont(event, silent = false) {
@@ -2320,6 +2308,7 @@ function removeCustomFont(event, silent = false) {
   if (styleEl) styleEl.textContent = '';
 
   customFontLoaded = false;
+  _fontAsset = null; persistSession();
   state.fontFamily = document.getElementById('fontFamily').value;
 
   // Resetear UI
@@ -2508,6 +2497,7 @@ function applyConfig(obj) {
   setSelect('exportScale', state.exportScale);
   updateExportBadge();
   syncAllCtl();
+  syncLibAudio();
 
   render();
 }
@@ -2546,8 +2536,8 @@ function tryLoadFromUrl() {
 async function init() {
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   loadEmotesFromStorage();
-  restoreAutosave();
-  _autosaveReady = true;
+  await loadLibrary();
+  await restoreAutosave();
   render();
   tryLoadFromUrl();
   initEditableSliderVals();
@@ -2727,6 +2717,8 @@ CONTROLS.push(
   { key:'vidRes', sec:'anim', type:'select', label:'Resolución del video', def:'1080', opts:[['1080','1080p (1920×1080)'],['1440','1440p (2560×1440)'],['2160','4K (3840×2160)']] },
   { key:'vidFps', sec:'anim', type:'select', label:'FPS', def:'30', opts:[['30','30'],['60','60']] },
   { key:'vidCodec', sec:'anim', type:'select', label:'Formato (MOV con transparencia)', def:'qtrle', opts:[['qtrle','QuickTime Animation (rápido)'],['prores','ProRes 4444 (máxima calidad, lento)']] },
+  { key:'sndInLib', sec:'sound', type:'select', label:'Sonido de entrada (de la biblioteca)', def:'', opts:[['','— Ninguno —']], onChange:() => syncLibAudio() },
+  { key:'sndOutLib', sec:'sound', type:'select', label:'Sonido de salida (de la biblioteca)', def:'', opts:[['','— Ninguno —']], onChange:() => syncLibAudio() },
   R('sndInVol','sound','Volumen de entrada',100,0,200,5,'%'),
   R('sndInOffS','sound','Retraso del sonido de entrada',0,0,1,0.05,'s'),
   { key:'sndOutSame', sec:'sound', type:'toggle', label:'Salida = entrada en reversa', def:true },
@@ -2775,7 +2767,7 @@ function buildControls() {
     const el = document.getElementById(id);
     const set = v => { state[c.key] = v; syncCtl(c); render(); };
     if (c.type === 'range')  el.addEventListener('input',  () => set(parseFloat(el.value)));
-    if (c.type === 'select') el.addEventListener('change', () => set(el.value));
+    if (c.type === 'select') el.addEventListener('change', () => { set(el.value); if (c.onChange) c.onChange(); });
     if (c.type === 'toggle') el.addEventListener('click',  () => set(!state[c.key]));
     if (c.type === 'color') {
       el.addEventListener('input', () => set(el.value));
@@ -2860,14 +2852,17 @@ function scheduleAutosave() {
     } catch (e) {}
   }, 400);
 }
-function restoreAutosave() {
+async function restoreAutosave() {
   try {
+    if (new URLSearchParams(location.search).has('c')) return;   // un link compartido tiene prioridad
     const a = JSON.parse(localStorage.getItem('streamkit_autosave') || 'null');
     if (!a || !a.cfg) return;
+    await restoreAssets('autosave', true);
     applyConfig(a.cfg);
     document.getElementById('messageText').value = a.msg || '';
     document.getElementById('username').value = a.user || '';
   } catch (e) { console.warn('No se pudo restaurar la sesión:', e); }
+  finally { _autosaveReady = true; render(); }
 }
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); e.shiftKey ? copyImage() : exportImage(); }
@@ -2920,14 +2915,21 @@ function drawClipFrame(ctx, o, W, H, t, A, k) {
 // ── Sonido ──
 const AUDIO = { in: null, out: null }; let _ac;
 const getAC = () => _ac || (_ac = new (window.AudioContext || window.webkitAudioContext)());
+async function setAudio(kind, name, raw, quiet) {
+  const buf = await getAC().decodeAudioData(raw.slice(0));   // decode consume la copia; guardamos el original
+  AUDIO[kind] = { buf, name, raw };
+  document.getElementById(kind === 'in' ? 'sndInName' : 'sndOutName').textContent = `${name} (${buf.duration.toFixed(2)} s)`;
+  if (!quiet) persistSession();
+}
 async function onAudioFile(kind, input) {
   const f = input.files[0]; if (!f) return;
-  try {
-    const buf = await getAC().decodeAudioData(await f.arrayBuffer());
-    AUDIO[kind] = { buf, name: f.name };
-    document.getElementById(kind === 'in' ? 'sndInName' : 'sndOutName').textContent = `${f.name} (${buf.duration.toFixed(2)} s)`;
-  } catch (e) { alert('No se pudo leer ese audio.'); }
+  try { await setAudio(kind, f.name, await f.arrayBuffer()); state[kind === 'in' ? 'sndInLib' : 'sndOutLib'] = ''; syncAllCtl(); } catch (e) { alert('No se pudo leer ese audio.'); }
   input.value = '';
+}
+function clearAudio(kind) {
+  AUDIO[kind] = null; state[kind === 'in' ? 'sndInLib' : 'sndOutLib'] = ''; syncAllCtl();
+  document.getElementById(kind === 'in' ? 'sndInName' : 'sndOutName').textContent = 'Sin archivo';
+  persistSession();
 }
 function reverseBuf(b) {
   const r = getAC().createBuffer(b.numberOfChannels, b.length, b.sampleRate);
@@ -2990,13 +2992,13 @@ function getFFmpeg() {
 async function makeClip(ov, label) {
   const ff = await getFFmpeg();
   const H = +state.vidRes, W = Math.round(H * 16 / 9), fps = +state.vidFps, k = H / 1080;
-  const A = animTimes(ov ? ov.text : state.messageText), n = Math.round(A.total * fps);
+  const A = animTimes(ov ? ov.text : state.messageText), n = Math.round(A.total * fps) + 1;   // +1: el último frame (t = fin) deja el cartel 100% fuera
   const o = renderOverlayAt(k * state.animScale / 100, ov);
   const fc = Object.assign(document.createElement('canvas'), { width: W, height: H }), fx = fc.getContext('2d'), names = [];
   try {
     for (let i = 0; i < n; i++) {
       fx.clearRect(0, 0, W, H);   // sin esto los frames anteriores quedan dibujados (estela)
-      drawClipFrame(fx, o, W, H, i / fps, A, k);
+      drawClipFrame(fx, o, W, H, i === n - 1 ? A.total : i / fps, A, k);
       const blob = await new Promise(r => fc.toBlob(r, 'image/png'));
       const nm = `f${String(i).padStart(5, '0')}.png`;
       await ff.writeFile(nm, new Uint8Array(await blob.arrayBuffer())); names.push(nm);
@@ -3006,7 +3008,7 @@ async function makeClip(ov, label) {
     if (wav) { await ff.writeFile('a.wav', wav); args.push('-i', 'a.wav'); }
     if (state.vidCodec === 'prores') args.push('-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le', '-vendor', 'apl0');
     else args.push('-c:v', 'qtrle', '-pix_fmt', 'argb');
-    if (wav) args.push('-c:a', 'pcm_s16le', '-t', A.total.toFixed(3));
+    if (wav) args.push('-c:a', 'pcm_s16le', '-t', (n / fps).toFixed(3));
     args.push('out.mov');
     _curLabel = label; setVidBusy(`${label} · codificando…`);
     if (await ff.exec(args) !== 0) throw new Error('ffmpeg falló al codificar');
@@ -3068,10 +3070,13 @@ function buildAnimExtras() {
   document.getElementById('soundContent').insertAdjacentHTML('afterbegin',
     `<div class="field"><label class="field-label">Sonido de entrada</label>
        <input type="file" accept="audio/*" onchange="onAudioFile('in',this)">
-       <span class="info-tag" id="sndInName">Sin archivo</span></div>
+       <span class="info-tag">Los sonidos de la biblioteca viajan con el preset: quien lo reciba los escucha sin descargar nada.</span>
+     <span class="info-tag" id="sndInName">Sin archivo</span>
+       <button class="share-btn" style="padding:4px 10px" onclick="clearAudio('in')">Quitar</button></div>
      <div class="field"><label class="field-label">Sonido de salida (si no usas la reversa)</label>
        <input type="file" accept="audio/*" onchange="onAudioFile('out',this)">
-       <span class="info-tag" id="sndOutName">Sin archivo</span></div>
+       <span class="info-tag" id="sndOutName">Sin archivo</span>
+       <button class="share-btn" style="padding:4px 10px" onclick="clearAudio('out')">Quitar</button></div>
      <span class="info-tag">Los audios no se guardan en los presets. Se mezclan dentro del MOV.</span>`);
 }
 buildAnimExtras();
@@ -3099,6 +3104,85 @@ function setMode(m) {
   if (m === 'anim') { if (!_prev) startAnimPreview(); } else stopAnimPreview();
 }
 buildModeTabs();
+
+// ═══════════════════════════════════════════════════════
+// ARCHIVOS LOCALES (fuente y audios) — se guardan en IndexedDB
+// ═══════════════════════════════════════════════════════
+const _idb = () => new Promise((res, rej) => {
+  const r = indexedDB.open('streamkit-assets', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('a');
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+});
+const idbSet = async (k, v) => { const db = await _idb(); return new Promise((res, rej) => { const t = db.transaction('a', 'readwrite'); t.objectStore('a').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); };
+const idbDel = async k => { const db = await _idb(); return new Promise((res, rej) => { const t = db.transaction('a', 'readwrite'); t.objectStore('a').delete(k); t.oncomplete = res; t.onerror = () => rej(t.error); }); };
+const idbGet = async k => { const db = await _idb(); return new Promise((res, rej) => { const q = db.transaction('a').objectStore('a').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); };
+
+const ASSET_KEYS = ['font', 'audioIn', 'audioOut'];
+async function saveAssets(prefix) {
+  try {
+    const cur = { font: _fontAsset,
+      audioIn: AUDIO.in && !AUDIO.in.lib && { name: AUDIO.in.name, raw: AUDIO.in.raw },
+      audioOut: AUDIO.out && !AUDIO.out.lib && { name: AUDIO.out.name, raw: AUDIO.out.raw } };
+    for (const k of ASSET_KEYS) { if (cur[k]) await idbSet(`${prefix}:${k}`, cur[k]); else await idbDel(`${prefix}:${k}`); }
+    return ASSET_KEYS.filter(k => cur[k]);
+  } catch (e) { console.warn('No se pudieron guardar los archivos:', e); return []; }
+}
+async function restoreAssets(prefix, quiet) {
+  try {
+    const f = await idbGet(`${prefix}:font`);
+    if (f) await installCustomFont(f.dataUrl, f.name, quiet);
+    for (const [kind, key] of [['in', 'audioIn'], ['out', 'audioOut']]) {
+      const a = await idbGet(`${prefix}:${key}`);
+      if (a) await setAudio(kind, a.name, a.raw, quiet);
+    }
+  } catch (e) { console.warn('No se pudieron restaurar los archivos:', e); }
+}
+async function deleteAssets(prefix) { try { for (const k of ASSET_KEYS) await idbDel(`${prefix}:${k}`); } catch (e) {} }
+let _persistT;
+function persistSession() { clearTimeout(_persistT); _persistT = setTimeout(() => saveAssets('autosave'), 300); }
+
+// ═══════════════════════════════════════════════════════
+// BIBLIOTECA (carpeta assets/ del sitio): fuentes y sonidos que viajan con los presets
+// ═══════════════════════════════════════════════════════
+let LIB = { fuentes: [], sonidos: [] };
+const libUrl = f => 'assets/' + f.split('/').map(encodeURIComponent).join('/');
+async function loadLibrary() {
+  try {
+    const r = await fetch('assets/biblioteca.json', { cache: 'no-cache' });
+    if (!r.ok) return;
+    LIB = await r.json();
+  } catch (e) { return; }
+  const fuentes = LIB.fuentes || [], sonidos = LIB.sonidos || [];
+  if (fuentes.length) {
+    const st = document.createElement('style');
+    st.textContent = fuentes.map(f => `@font-face{font-family:'${f.nombre} (biblioteca)';src:url('${libUrl(f.archivo)}');font-weight:100 900;font-display:swap}`).join('\n');
+    document.head.appendChild(st);
+    const og = document.createElement('optgroup'); og.label = 'Biblioteca';
+    for (const f of fuentes) og.appendChild(new Option(f.nombre, `${f.nombre} (biblioteca)`));
+    const sel = document.getElementById('fontFamily'); sel.insertBefore(og, sel.firstChild);
+  }
+  for (const key of ['sndInLib', 'sndOutLib']) {
+    const el = document.getElementById('c_' + key);
+    for (const sn of sonidos) el.add(new Option(sn.nombre, sn.archivo));
+  }
+  syncAllCtl();
+}
+async function syncLibAudio() {
+  for (const [kind, key] of [['in', 'sndInLib'], ['out', 'sndOutLib']]) {
+    const id = state[key], cur = AUDIO[kind];
+    if (id) {
+      if (cur && cur.lib === id) continue;
+      try {
+        const raw = await (await fetch(libUrl(id))).arrayBuffer();
+        await setAudio(kind, id.split('/').pop(), raw, true);
+        AUDIO[kind].lib = id;
+      } catch (e) { console.warn('No se pudo cargar el sonido de la biblioteca:', e); }
+    } else if (cur && cur.lib) {
+      AUDIO[kind] = null;
+      document.getElementById(kind === 'in' ? 'sndInName' : 'sndOutName').textContent = 'Sin archivo';
+    }
+  }
+}
 
 window.addEventListener('resize', render);
 init();

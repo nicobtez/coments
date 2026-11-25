@@ -1,0 +1,14 @@
+{
+  "fuentes": [
+    {
+      "nombre": "carmen sans extra bold",
+      "archivo": "fuentes/carmen-sans-extra-bold.ttf"
+    }
+  ],
+  "sonidos": [
+    {
+      "nombre": "sfx mensaje iphone",
+      "archivo": "sonidos/sfx mensaje iphone.mp3"
+    }
+  ]
+}
